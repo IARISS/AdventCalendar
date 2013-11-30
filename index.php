@@ -29,6 +29,8 @@ if (file_exists(SETTINGS_FILE)) {
     
     // want to add piwik ID?
     if (isset($settings->piwik) && !empty($settings->piwik)) { define('PIWIK', $settings->piwik); }
+    // want to add disqus thread?
+    if (isset($settings->piwik) && !empty($settings->piwik)) { define('PIWIK', $settings->piwik); }
 }
 else { die('<!doctype html><html><head><title>Advent Calendar</title><style>body{width:600px;margin:50px auto 20px;}</style></head><body><div style="font-size:30px;"><strong>Oups!</strong> Settings file not found.</div><div><p>Edit <code>private/settings.example.json</code> to personnalize title and year and rename it <code>settings.json</code>.</p><p>If it is not already done, put your photos in the <code>private/</code> folder, and name them with the number of the day you want to illustrate.</p></div></body></html>'); }
 
@@ -161,6 +163,9 @@ abstract class Advent {
 		if (self::isActiveDay($day+1) && ($day+1)<self::DAYS) { $result .= '"><a href="?'. URL_DAY .'='. ($day+2) .'" title="tomorrow" class="tip" data-placement="left">'; }
 		else { $result .= ' disabled"><a>'; }
 		$result .= '<i class="glyphicon glyphicon-hand-right"></i></a></li></ul>';
+		
+		// we add disqus thread if supported
+		if (defined('DISQUS')) { $result .= '<div id="disqus_thread"></div>'; }
 		
 		return $result.'</div>';
 	}
@@ -316,7 +321,7 @@ if (empty($template)) {
     	<script src="assets/bootstrap.min.js"></script>
     	<script src="assets/adventcalendar.js"></script>
     	<?php if (defined('PIWIK')): ?>
-	<script type="text/javascript">
+    	<script type="text/javascript">
 		var _paq = _paq || [];
 		_paq.push(["trackPageView"]);
 		_paq.push(["enableLinkTracking"]);
@@ -327,8 +332,8 @@ if (empty($template)) {
 		var d=document, g=d.createElement("script"), s=d.getElementsByTagName("script")[0]; g.type="text/javascript";
 		g.defer=true; g.async=true; g.src=u+"piwik.js"; s.parentNode.insertBefore(g,s);
 		})();
-	</script>
-	<?php endif; ?>
+    	</script>
+    	<?php endif; ?>
     	<?php if (defined('DISQUS')): ?>
     	<script type="text/javascript">
 	        var disqus_shortname = '<?php echo DISQUS; ?>';
