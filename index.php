@@ -30,7 +30,7 @@ if (file_exists(SETTINGS_FILE)) {
     // want to add piwik ID?
     if (isset($settings->piwik) && !empty($settings->piwik)) { define('PIWIK', $settings->piwik); }
     // want to add disqus thread?
-    if (isset($settings->piwik) && !empty($settings->piwik)) { define('PIWIK', $settings->piwik); }
+    if (isset($settings->disqus) && !empty($settings->disqus)) { define('DISQUS', $settings->disqus); }
 }
 else { die('<!doctype html><html><head><title>Advent Calendar</title><style>body{width:600px;margin:50px auto 20px;}</style></head><body><div style="font-size:30px;"><strong>Oups!</strong> Settings file not found.</div><div><p>Edit <code>private/settings.example.json</code> to personnalize title and year and rename it <code>settings.json</code>.</p><p>If it is not already done, put your photos in the <code>private/</code> folder, and name them with the number of the day you want to illustrate.</p></div></body></html>'); }
 
