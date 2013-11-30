@@ -26,6 +26,9 @@ if (file_exists(SETTINGS_FILE)) {
     
     // do the user want an other background?
     if (isset($settings->background) && $settings->background == 'alternate') { define('ALTERNATE_BACKGROUND', TRUE); }
+    
+    // want to add piwik ID?
+    if (isset($settings->piwik) && !empty($settings->piwik)) { define('PIWIK', $settings->piwik); }
 }
 else { die('<!doctype html><html><head><title>Advent Calendar</title><style>body{width:600px;margin:50px auto 20px;}</style></head><body><div style="font-size:30px;"><strong>Oups!</strong> Settings file not found.</div><div><p>Edit <code>private/settings.example.json</code> to personnalize title and year and rename it <code>settings.json</code>.</p><p>If it is not already done, put your photos in the <code>private/</code> folder, and name them with the number of the day you want to illustrate.</p></div></body></html>'); }
 
@@ -286,6 +289,7 @@ if (empty($template)) {
 		  <?php
 		  	if (defined('PASSKEY') && isset($_SESSION['welcome'])) { echo '<li><a href="./?logout" title="logout" class="tip" data-placement="bottom"><i class="glyphicon glyphicon-user"></i></a></li>'; }
 		  ?>
+		  <li><a href="http://iariss.fr" class="tip" data-placement="bottom" title="iariss"><img style="vertical-align:top; overflow:hidden;" src="//static.iariss.fr/iariss/favicon/favicon.png" alt="iariss" height="20" width="20" /></a></li>
 		</ul>
 		</div>
 		</div>
@@ -302,8 +306,8 @@ if (empty($template)) {
 		<div class="container">
 			<p class="pull-right"><a href="#" id="goHomeYouAreDrunk" class="tip" data-placement="left" title="upstairs"><i class="glyphicon glyphicon-tree-conifer"></i></a></p>
 			<div class="notice">
-				<a href="https://github.com/nicolabricot/AdventCalendar" rel="external">Advent Calendar</a> &middot; Version <?php echo VERSION; ?>
-				<br />Developped with love by <a href="http://nicolas.devenet.info" rel="external">Nicolas Devenet</a>.
+				<a href="https://github.com/nicolabricot/AdventCalendar" rel="external">Advent Calendar</a> &middot; Version <?php echo VERSION; ?>+iariss
+				<br />Developped with love by <a href="http://nicolas.devenet.info" rel="external">Nicolas Devenet</a> and adapted for <a href="http://iariss.fr" rel="external">IARISS</a>.
 			</div>
 		</div>
 		</footer>
@@ -311,5 +315,29 @@ if (empty($template)) {
     	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
     	<script src="assets/bootstrap.min.js"></script>
     	<script src="assets/adventcalendar.js"></script>
+    	<?php if (defined('PIWIK')): ?>
+	<script type="text/javascript">
+		var _paq = _paq || [];
+		_paq.push(["trackPageView"]);
+		_paq.push(["enableLinkTracking"]);
+		(function() {
+		var u=(("https:" == document.location.protocol) ? "https" : "http") + "://piwik.iariss.fr/";
+		_paq.push(["setTrackerUrl", u+"piwik.php"]);
+		_paq.push(["setSiteId", "<?php echo PIWIK; ?>"]);
+		var d=document, g=d.createElement("script"), s=d.getElementsByTagName("script")[0]; g.type="text/javascript";
+		g.defer=true; g.async=true; g.src=u+"piwik.js"; s.parentNode.insertBefore(g,s);
+		})();
+	</script>
+	<?php endif; ?>
+    	<?php if (defined('DISQUS')): ?>
+    	<script type="text/javascript">
+	        var disqus_shortname = '<?php echo DISQUS; ?>';
+	        (function() {
+	            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+	            dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+	            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+	        })();
+    	</script>
+    	<?php endif; ?>
 	</body>
 </html>
