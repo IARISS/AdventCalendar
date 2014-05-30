@@ -1,14 +1,14 @@
 <?php
 
 /**
- *	Developped with love by Nicolas Devenet <nicolas[at]devenet.info>
- *	Code hosted on github.com/nicolabricot
+ *  Developed with love by Nicolas Devenet <nicolas[at]devenet.info>
+ *  Code hosted on https://github.com/nicolabricot/AdventCalendar
  */
 
 error_reporting(0);
 
 // constants to be used
-define('VERSION', '1.1.0');
+define('VERSION', '1.2.0');
 define('URL_DAY', 'day');
 define('PRIVATE_FOLDER', './private');
 define('SETTINGS_FILE', PRIVATE_FOLDER.'/settings.json');
@@ -16,21 +16,32 @@ define('CALENDAR_FILE', PRIVATE_FOLDER.'/calendar.json');
 
 // load settings from file
 if (file_exists(SETTINGS_FILE)) {
-    $settings = json_decode(file_get_contents(SETTINGS_FILE));
+	$settings = json_decode(file_get_contents(SETTINGS_FILE));
 
-    define('TITLE', $settings->title);
-    define('YEAR', $settings->year);
-    
-    // is it a private calendar?
-    if (isset($settings->passkey) && !empty($settings->passkey)) { define('PASSKEY', $settings->passkey); }
-    
-    // do the user want an other background?
-    if (isset($settings->background) && $settings->background == 'alternate') { define('ALTERNATE_BACKGROUND', TRUE); }
-    
-    // want to add piwik ID?
-    if (isset($settings->piwik) && !empty($settings->piwik)) { define('PIWIK', $settings->piwik); }
-    // want to add disqus thread?
-    if (isset($settings->disqus) && !empty($settings->disqus)) { define('DISQUS', $settings->disqus); }
+	define('TITLE', $settings->title);
+	define('YEAR', $settings->year);
+	
+	// is it a private calendar?
+	if (isset($settings->passkey) && !empty($settings->passkey)) { define('PASSKEY', $settings->passkey); }
+	
+	// do the user want an other background?
+	if (isset($settings->background) && $settings->background == 'alternate') { define('ALTERNATE_BACKGROUND', TRUE); }
+
+	// want to add disqus thread?
+	if (isset($settings->disqus_shortname) && !empty($settings->disqus_shortname)) {
+		AddOns::Register(AddOns::AddOn('disqus', $settings->disqus_shortname));
+		AddOns::JavaScriptRegistred();
+	}
+	// want to add google analytics?
+	if (isset($settings->google_analytics) && !empty($settings->google_analytics) && isset($settings->google_analytics->tracking_id) && isset($settings->google_analytics->domain) ) {
+		AddOns::Register(AddOns::AddOn('ga', AddOns::JsonToArray($settings->google_analytics)));
+		AddOns::JavaScriptRegistred();
+	}
+	// want to add piwik?
+	if (isset($settings->piwik) && !empty($settings->piwik) && isset($settings->piwik->piwik_url) && isset($settings->piwik->site_id) ) {
+		AddOns::Register(AddOns::AddOn('piwik', AddOns::JsonToArray($settings->piwik)));
+		AddOns::JavaScriptRegistred();
+	}
 }
 else { die('<!doctype html><html><head><title>Advent Calendar</title><style>body{width:600px;margin:50px auto 20px;}</style></head><body><div style="font-size:30px;"><strong>Oups!</strong> Settings file not found.</div><div><p>Edit <code>private/settings.example.json</code> to personnalize title and year and rename it <code>settings.json</code>.</p><p>If it is not already done, put your photos in the <code>private/</code> folder, and name them with the number of the day you want to illustrate.</p></div></body></html>'); }
 
@@ -43,10 +54,43 @@ if (!is_file(PRIVATE_FOLDER.'/.htaccess')) { file_put_contents(PRIVATE_FOLDER.'/
 if (!is_file(PRIVATE_FOLDER.'/.htaccess')) die('<div><strong>Oups!</strong> Application does not have the right to write in its own directory <code>'.realpath(dirname(__FILE__)).'</code>.</div>');
 
 /*
- *	Core classes
+ *  Core classes
  */
+abstract class AddOns {
+	const Data = 'data';
+	const Name = 'name';
+
+	static private $addons = Array();
+
+	static function Register(Array $addon) {
+		if (empty($addon[self::Data])) { $addon[self::Data] = TRUE; }
+		self::$addons[$addon['name']] = $addon[self::Data];
+	}
+
+	static function AddOn($name, $data = TRUE) {
+		return array(self::Name => $name, self::Data => $data);
+	}
+
+	static function Found($name) {
+		return isset(self::$addons[$name]);
+	}
+
+	static function Get($name) {
+		if (! self::Found($name)) { return; }
+		return self::$addons[$name];
+	}
+
+	static function JavaScriptRegistred() {
+		self::Register(self::AddOn('js'));
+	}
+
+	static function JsonToArray($json) {
+		return json_decode(json_encode($json), TRUE);
+	}
+}
+
 abstract class Image {
-	function get($day) {
+	static function get($day) {
 		// check if we can display the request photo
 		if (Advent::acceptDay($day) && Advent::isActiveDay($day)) {
 			$day = $day+1;
@@ -55,7 +99,11 @@ abstract class Image {
 			if (! self::exists($day.$extension)) {
 				$extension = '.jpeg';
 				// in case of .jpg or .jpeg file is not found
-				if (! self::exists($day.$extension)) { die('<div><strong>Oups!</strong> Unable to load photo.</div>'); }
+				if (! self::exists($day.$extension)) {
+					// enhancement #8: use a default image when not found
+					header('Content-type: image/png');
+					exit(file_get_contents('./assets/404.png'));
+				}
 			}
 			$photo = file_get_contents(PRIVATE_FOLDER.'/'.$day.$extension);
 			header('Content-type: image/jpeg');
@@ -65,7 +113,7 @@ abstract class Image {
 		exit();
 	}
 	
-	private function exists($file) {
+	static private function exists($file) {
 		return file_exists(PRIVATE_FOLDER.'/'.$file);
 	}
 }
@@ -79,7 +127,7 @@ abstract class Advent {
 	const BEGIN_DATE = 1201;
 	const END_DATE = 1224;
 	
-	function state() {
+	static function state() {
 		$now = date('Ymd');
 		
 		// if we are before the advent
@@ -90,25 +138,25 @@ abstract class Advent {
 		return self::CURRENT_ADVENT;
 	}
 	
-	function acceptDay($day) {
+	static function acceptDay($day) {
 		return $day >= 0 && $day < self::DAYS;
 	}
 	
-	function isActiveDay($day) {
+	static function isActiveDay($day) {
 		$state = self::state();
 		return ($state == self::CURRENT_ADVENT && $day < date('d')) || $state == self::AFTER_ADVENT;
 	}
 	
-	private function getDayColorClass($day, $active = FALSE) {
+	static private function getDayColorClass($day, $active = FALSE) {
 		$result = '';
 		// is the day active ?
-		if ($active) { $result .= 'active '; }		
+		if ($active) { $result .= 'active '; }    
 		// set a color for the background
 		$result .= 'day-color-'.($day%4 + 1);
 		return $result;
 	}
 	
-	function getDays() {
+	static function getDays() {
 		$result = '<div class="container days">';
 		for ($i=0; $i<self::DAYS; $i++) {
 			$active = self::isActiveDay($i);
@@ -121,7 +169,7 @@ abstract class Advent {
 		return $result.'</div>';
 	}
 	
-	function getDay($day) {
+	static function getDay($day) {
 		$result = '<div class="container day">';
 		
 		// check if we have info to display
@@ -138,7 +186,7 @@ abstract class Advent {
 		$result .= '<a href="./?'. URL_DAY.'='. ($day+1) .'" class="day-row '. self::getDayColorClass($day, TRUE) .'"><span>'. ($day+1) .'</span></a>';
 		// set the title
 		$result .= '<h1><span>';
-		if (!empty($title))	{ $result .= $title; }
+		if (!empty($title)) { $result .= $title; }
 		else { $result .= 'Day '.($day+1); }
 		$result .= '</span></h1>';
 		// clearfix
@@ -165,8 +213,7 @@ abstract class Advent {
 		$result .= '<i class="glyphicon glyphicon-hand-right"></i></a></li></ul>';
 		
 		// we add disqus thread if supported
-		if (defined('DISQUS')) { $result .= '<div id="disqus_thread"></div>'; }
-		
+		if (AddOns::Found('disqus')) { $result .= '<div id="disqus_thread"></div>'; }
 		return $result.'</div>';
 	}
 	
@@ -181,6 +228,9 @@ abstract class Advent {
  */
 
 if (defined('PASSKEY')) {
+	// for calendars on same server, set a different cookie name based on the script path
+	session_name(md5($_SERVER['SCRIPT_NAME']));
+	
 	session_start();
 	
 	// want to log out
@@ -218,7 +268,7 @@ if (defined('PASSKEY') && isset($loginRequested)) {
 	$template = '
 	<div class="container text-center">
 		<div class="page-header"><h1 class="text-danger">This is a private area!</h1></div>
-		<p>Please sign in with your <span class="font-normal">passkey</span> to continue.</p>	
+		<p>Please sign in with your <span class="font-normal">passkey</span> to continue.</p> 
 		<form method="post" role="form" class="espace-lg form-inline">
 			<div class="form-group"><input type="password" name="pass" id="pass" class="form-control input-lg" autofocus required /></div>
 			<button type="submit" class="btn btn-default btn-lg tip" data-placement="right" data-title="sign in"><i class="glyphicon glyphicon-eye-open"></i></button>
@@ -229,7 +279,7 @@ if (defined('PASSKEY') && isset($loginRequested)) {
 else if (isset($_GET['photo'])) { Image::get($_GET['photo']-1); }
 // nothing asked, display homepage
 else if (empty($_GET)) {
-	$template = Advent::getDays();		
+	$template = Advent::getDays();    
 }
 // want to display a day
 else if (isset($_GET['day'])) {
@@ -269,8 +319,8 @@ if (empty($template)) {
 		<link rel="icon" type="image/png" href="assets/favicon.png" />
 		
 		<link href="assets/bootstrap.min.css" rel="stylesheet">
-		<link href="//fonts.googleapis.com/css?family=Lato:300,400,700" rel="stylesheet" type="text/css">
 		<link href="assets/adventcalendar.css" rel="stylesheet">
+		<link href="//fonts.googleapis.com/css?family=Lato:300,400,700" rel="stylesheet" type="text/css">
 
 	</head>
 
@@ -279,22 +329,16 @@ if (empty($template)) {
 		<nav class="navbar navbar-default navbar-static-top" role="navigation">
 		<div class="container">
 		<div class="navbar-header">
-		<!--<button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar-collapse">
-		  <span class="sr-only">navigation</span>
-		  <span class="icon-bar"></span>
-		  <span class="icon-bar"></span>
-		  <span class="icon-bar"></span>
-		</button>-->
 		<a class="navbar-brand tip" href="./" title="home" data-placement="right"><i class="glyphicon glyphicon-home"></i> <?php echo TITLE; ?></a>
 		</div>
 		
 		<div class="collapse navbar-collapse" id="navbar-collapse">
 		<ul class="nav navbar-nav navbar-right">
-		  <li><a href="./?about" class="tip" data-placement="left" title="about"><i class="glyphicon glyphicon-tree-conifer"></i> Advent Calendar</a></li>
-		  <?php
-		  	if (defined('PASSKEY') && isset($_SESSION['welcome'])) { echo '<li><a href="./?logout" title="logout" class="tip" data-placement="bottom"><i class="glyphicon glyphicon-user"></i></a></li>'; }
-		  ?>
-		  <li><a href="http://iariss.fr" class="tip" data-placement="bottom" title="iariss"><img style="vertical-align:top; overflow:hidden;" src="//static.iariss.fr/iariss/favicon/favicon.png" alt="iariss" height="20" width="20" /></a></li>
+			<li><a href="./?about" class="tip" data-placement="left" title="about"><i class="glyphicon glyphicon-tree-conifer"></i> Advent Calendar</a></li>
+			<?php
+			if (defined('PASSKEY') && isset($_SESSION['welcome'])) { echo '<li><a href="./?logout" title="logout" class="tip" data-placement="bottom"><i class="glyphicon glyphicon-user"></i></a></li>'; }
+			?>
+			<li><a href="http://iariss.fr" class="tip" data-placement="bottom" title="iariss"><img style="vertical-align:top; overflow:hidden;" src="//static.iariss.fr/iariss/favicon/favicon.png" alt="iariss" height="20" width="20" /></a></li>
 		</ul>
 		</div>
 		</div>
@@ -312,37 +356,34 @@ if (empty($template)) {
 			<p class="pull-right"><a href="#" id="goHomeYouAreDrunk" class="tip" data-placement="left" title="upstairs"><i class="glyphicon glyphicon-tree-conifer"></i></a></p>
 			<div class="notice">
 				<a href="https://github.com/nicolabricot/AdventCalendar" rel="external">Advent Calendar</a> &middot; Version <?php echo VERSION; ?>+iariss
-				<br />Developped with love by <a href="http://nicolas.devenet.info" rel="external">Nicolas Devenet</a> and adapted for <a href="http://iariss.fr" rel="external">IARISS</a>.
+				<br />Developed with love by <a href="http://nicolas.devenet.info" rel="external">Nicolas Devenet</a> and adapted for <a href="http://iariss.fr" rel="external">IARISS</a>.
 			</div>
 		</div>
 		</footer>
 		
-    	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
-    	<script src="assets/bootstrap.min.js"></script>
-    	<script src="assets/adventcalendar.js"></script>
-    	<?php if (defined('PIWIK')): ?>
-    	<script type="text/javascript">
-		var _paq = _paq || [];
-		_paq.push(["trackPageView"]);
-		_paq.push(["enableLinkTracking"]);
-		(function() {
-		var u=(("https:" == document.location.protocol) ? "https" : "http") + "://piwik.iariss.fr/";
-		_paq.push(["setTrackerUrl", u+"piwik.php"]);
-		_paq.push(["setSiteId", "<?php echo PIWIK; ?>"]);
-		var d=document, g=d.createElement("script"), s=d.getElementsByTagName("script")[0]; g.type="text/javascript";
-		g.defer=true; g.async=true; g.src=u+"piwik.js"; s.parentNode.insertBefore(g,s);
-		})();
-    	</script>
-    	<?php endif; ?>
-    	<?php if (defined('DISQUS')): ?>
-    	<script type="text/javascript">
-	        var disqus_shortname = '<?php echo DISQUS; ?>';
-	        (function() {
-	            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
-	            dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
-	            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
-	        })();
-    	</script>
-    	<?php endif; ?>
+		<script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+		<script src="assets/bootstrap.min.js"></script>
+		<script src="assets/adventcalendar.js"></script>
+		<?php if (AddOns::Found('js')): ?>
+		<script>
+			<?php if (AddOns::Found('disqus')): ?>
+			var disqus_shortname = '<?php echo AddOns::Get("disqus"); ?>';
+			(function() {
+				var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+				dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+				(document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+			})();
+			<?php endif; ?>
+			<?php if (AddOns::Found('ga')): $ga = AddOns::Get('ga'); ?>
+			(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){ (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o), m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m) })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+				ga('create', '<?php echo $ga["tracking_id"]; ?>', '<?php echo $ga["domain"]; ?>');
+				ga('send', 'pageview');
+			<?php endif; ?>
+			<?php if (AddOns::Found('piwik')): $piwik = AddOns::Get('piwik'); ?>
+			var _paq = _paq || [];
+			(function(){ var u='//<?php echo $piwik["piwik_url"]; ?>/'; _paq.push(['setSiteId', '<?php echo $piwik["site_id"]; ?>']); _paq.push(['setTrackerUrl', u+'piwik.php']); _paq.push(['trackPageView']); _paq.push(['enableLinkTracking']); var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0]; g.type='text/javascript'; g.defer=true; g.async=true; g.src=u+'piwik.js'; s.parentNode.insertBefore(g,s); })();
+			<?php endif; ?>
+		</script>
+		<?php endif; ?>
 	</body>
 </html>
